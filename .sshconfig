@@ -1,0 +1,78 @@
+Host *.ekylibre*
+  User ekylibre
+  Port 12721
+
+Host *prod
+  User ekylibre
+  Port 12721
+Host *test
+  User ekylibre
+  Port 12721
+Host *dev
+  User ekylibre
+  Port 12721
+Host *alpha
+  User ekylibre
+  Port 12721
+Host *db
+  User ekylibre
+  Port 12721
+
+Host mb-prod
+  HostName ma004-v3.ekylibre.com
+Host eky-prod
+  HostName ma002-v2.ekylibre.com
+Host alb-prod
+  HostName alb.ekylibre.com
+
+Host mb-test
+  HostName ma003-v3.ekylibre-test.com
+Host eky-test
+  HostName ma005-v2.ekylibre-test.com
+Host alb-test
+  HostName alb.ekylibre-test.com
+
+Host mb-dev
+  HostName ekylibre-dev.com
+Host eky-dev
+  HostName v2.ekylibre-dev.com
+Host alb-dev
+  HostName alb.ekylibre-dev.com
+
+Host mb-alpha
+  HostName web.ekylibre-alpha.farm
+Host eky-alpha
+  HostName v2.ekylibre-alpha.farm
+Host alb-alpha
+  HostName alb.ekylibre-alpha.farm
+
+Host eky-core
+  HostName 51.77.220.80
+  User ekylibre
+  Port 12721
+
+
+Host athena-db
+  HostName athena.ekylibre.com
+Host replica-ovh-db
+  HostName 51.75.28.29
+
+Host lexicon
+  User lex
+  Port 12721
+  HostName lexicon.ekylibre.com
+
+Host innovation
+  User ekylibre
+  Port 12721
+  HostName innovation.ekylibre.io
+
+Host integration-tim
+  User ekylibre
+  Port 12721
+  HostName tim.ekylibre.com
+
+Host integration-cer
+  User ekylibre
+  Port 12721
+  HostName ekylibre-cer.fr
