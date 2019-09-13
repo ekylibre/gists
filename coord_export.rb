@@ -1,5 +1,6 @@
 require 'csv'
 require 'sshkit'
+require 'colored'
 require 'google_drive'
 
 class CoordExport
@@ -21,15 +22,27 @@ class CoordExport
 
     def push_to_drive
       return unless @final_export
-      session = GoogleDrive::Session.from_config("config.json")
+      config = OpenStruct.new({
+        "client_id": "<CLIENT_ID>",
+        "client_secret": "<SECRET>",
+        "scope": [
+          "https://www.googleapis.com/auth/drive",
+          "https://spreadsheets.google.com/feeds/"
+        ],
+        "refresh_token": "<REFRESH_TOKEN>"
+      })
+      session = GoogleDrive::Session.from_config(config)
       destination_folder = session.file_by_name("Communication").file_by_name("Geoloc Users")
+      puts "Uploading to Drive as #{@final_export}...".blue
       destination_folder.upload_from_file("/tmp/#{@final_export}", @final_export, convert: false)
+      puts "Upload complete!".blue
     end
 
     def clicnfarm_export
       on 'mb-prod' do
         within('prod-current') do
           execute :bundle, :exec, 'rails runner -e production "'+<<-RUBY+'"'
+
             csv = CSV.generate(col_sep: ?;) do |c|
               address_sql_expression = <<-SQL
                 entity_addresses.mail_line_1
@@ -38,20 +51,23 @@ class CoordExport
                   || entity_addresses.mail_line_4
                   || entity_addresses.mail_line_5
                   || entity_addresses.mail_line_6
-                SQL
+              SQL
               entities = Entity.where(of_company: true)
                                .joins(:farm, :default_mail_address)
                                .where('entity_addresses.farm_id = entities.farm_id')
               entity_addresses = entities.pluck('farms.name AS farm,' +
                                                  address_sql_expression + ' AS address')
                                          .map{|(f,a)| [f, { address: a }] }
+
               centroid_sql_expression = <<-SQL
                 ST_Centroid(ST_CollectionExtract(ST_Collect(plots.shape), 3))
               SQL
+
               plots = Plot.group('farms.name').joins(:farm)
               plot_addresses = plots.pluck('farms.name AS farm,' +
                                            centroid_sql_expression + ' AS centroid')
                                     .map { |(f, c)| [f, { coordinates: c }] }
+
               addresses = entity_addresses + plot_addresses
               merged_addresses = addresses.group_by(&:first)
                                          .map do |k, v|
@@ -59,6 +75,7 @@ class CoordExport
                 full_keyed = {address: nil, coordinates: nil}.merge(h)
                 [k, full_keyed]
               end.to_h
+
               without_empty = merged_addresses
                 .reject { |k,v| v.values.compact.empty? }
                 .map do |k,v|
@@ -66,7 +83,9 @@ class CoordExport
                   h[:coordinates] &&= [h[:coordinates].x, h[:coordinates].y]
                   [k, h]
                 end.to_h
+
               with_splatted_coords = without_empty.map { |k, v| [k, v[:address], *v[:coordinates]] }
+
               with_splatted_coords.each { |l| c << l }
             end
             File.write('tmp/clicnfarm_export.csv', csv)
@@ -80,6 +99,7 @@ class CoordExport
       on 'eky-prod' do
         within 'prod-current' do
           execute :bundle, :exec, 'rails runner -e production "'+<<-RUBY+'"'
+
             csv = CSV.generate(col_sep: ?;) do |c|
               existing_list = Ekylibre::Tenant.list.reject do |t|
                 begin
@@ -89,11 +109,13 @@ class CoordExport
                   true
                 end
               end
+
               list = existing_list.map do |t|
                 Ekylibre::Tenant.switch! t
                 entity_address = Entity.of_company &&
                                  Entity.of_company.default_mail_address &&
                                  Entity.of_company.default_mail_address.mail_lines
+
                 coordinate_sql_expression = <<-SQL
                 ST_AsGeoJSON(
                   ST_Centroid(
@@ -106,13 +128,17 @@ class CoordExport
                 coordinates = ActiveRecord::Base.connection.execute(query).first['centroid']
                 [t, { address: entity_address, coordinates: coordinates }]
               end.to_h
+
               without_empty = list.reject { |k,v| v.values.compact.empty? }
+
               coordinates_ready = without_empty.map do |k,v|
                 h = v.dup
                 h[:coordinates] &&= eval(h[:coordinates])[:coordinates]
                 [k, h]
               end.to_h
+
               splatted = coordinates_ready.map { |k, v| [k, v[:address], *v[:coordinates]] }
+
               splatted.each { |l| c << l }
             end
             File.write('tmp/ekylibre_export.csv', csv)
@@ -127,6 +153,7 @@ class CoordExport
       on 'mb-prod' do
         within 'prod-current' do
           execute :bundle, :exec, 'rails runner -e production "'+<<-RUBY+'"'
+
             csv = CSV.generate(col_sep: ?;) do |c|
               emails = Farm.joins(:owner).pluck('users.email AS owner, farms.name AS farm')
               emails.each { |l| c << l }
@@ -171,7 +198,7 @@ class CoordExport
         new_csv.each { |l| c << l }
       end
 
-      @final_export = "export_#{DateTime.now.strftime("%d-%m-%Y — %H:%M")}.csv"
+      @final_export = "export_#{DateTime.now.strftime("%Y-%m-%d — %H:%M")}.csv"
       File.write("/tmp/#{@final_export}", csv)
     end
   end
